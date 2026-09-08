@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Web Vitals & Search Visibility Analyzer</title>
+<style>
+  :root {
+    --bg: #0b0e14; --panel: #131722; --border: #232838; --text: #e6e9f0; --muted: #8a92a6;
+    --accent: #4f8cff; --green: #2ecc71; --yellow: #f1c40f; --orange: #e67e22; --red: #e74c3c;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  header { padding: 32px 24px 16px; text-align: center; }
+  header h1 { margin: 0 0 6px; font-size: 1.6rem; }
+  header p { margin: 0; color: var(--muted); }
+  .search-bar { display: flex; gap: 10px; max-width: 640px; margin: 24px auto; padding: 0 24px; }
+  .search-bar input { flex: 1; padding: 12px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: var(--text); font-size: 1rem; }
+  .search-bar button { padding: 12px 22px; border-radius: 8px; border: none; background: var(--accent); color: white; font-weight: 600; cursor: pointer; font-size: 1rem; }
+  .search-bar button:disabled { opacity: 0.6; cursor: default; }
+  main { max-width: 900px; margin: 0 auto; padding: 0 24px 60px; }
+  .status { text-align: center; color: var(--muted); padding: 20px; }
+  .overall { text-align: center; padding: 20px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 24px; }
+  .overall .score { font-size: 3rem; font-weight: 800; }
+  .overall .meta { color: var(--muted); font-size: 0.9rem; margin-top: 4px; }
+  .categories { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+  @media (max-width: 700px) { .categories { grid-template-columns: 1fr; } }
+  .cat-card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+  .cat-card h3 { margin: 0 0 4px; font-size: 0.85rem; letter-spacing: 0.06em; color: var(--muted); text-transform: uppercase; }
+  .cat-card .cat-score { font-size: 1.8rem; font-weight: 700; }
+  .cat-card .cat-summary { font-size: 0.8rem; color: var(--muted); margin-top: 6px; }
+  .grade-A, .grade-B { color: var(--green); }
+  .grade-C { color: var(--yellow); }
+  .grade-D { color: var(--orange); }
+  .grade-F { color: var(--red); }
+  .findings { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 20px; overflow: hidden; }
+  .findings h3 { margin: 0; padding: 14px 16px; border-bottom: 1px solid var(--border); font-size: 1rem; }
+  .finding { display: flex; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .finding:last-child { border-bottom: none; }
+  .finding .mark { flex-shrink: 0; width: 20px; text-align: center; font-weight: 700; }
+  .finding.pass .mark { color: var(--green); }
+  .finding.fail .mark { color: var(--red); }
+  .finding .check { font-weight: 600; }
+  .finding .detail { color: var(--muted); font-size: 0.85rem; margin-top: 2px; }
+  .finding .fix { color: var(--accent); font-size: 0.85rem; margin-top: 4px; }
+  .actions { background: var(--panel); border: 1px solid var(--accent); border-radius: 12px; padding: 16px 20px; }
+  .actions h3 { margin: 0 0 10px; }
+  .actions ol { margin: 0; padding-left: 20px; }
+  .actions li { margin-bottom: 6px; }
+  .error { color: var(--red); text-align: center; padding: 20px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Web Vitals & Search Visibility Analyzer</h1>
+  <p>SEO (search) &middot; AEO (answer engines) &middot; GEO (generative/LLM search)</p>
+</header>
+
+<div class="search-bar">
+  <input id="url-input" type="text" placeholder="https://example.com" />
+  <button id="analyze-btn">Analyze</button>
+</div>
+
+<main id="results"></main>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
