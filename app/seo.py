@@ -9,7 +9,7 @@ import os
 import httpx
 
 from app.models import Finding
-from app.scoring import build_category_result
+from app.scoring import build_category_result, shorten
 from app.scraper import PageData
 
 PSI_ENDPOINT = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed"
@@ -36,11 +36,12 @@ def analyze_seo(page: PageData):
         fix="Add a meta description between 50-160 characters that summarizes the page and includes a call to action." if not (page.meta_description and 50 <= desc_len <= 160) else None,
     ))
 
+    h1_preview = [shorten(h) for h in page.h1s[:5]]
     findings.append(Finding(
         check="Exactly one H1 heading",
         passed=len(page.h1s) == 1,
         weight=8,
-        detail=f"Found {len(page.h1s)} H1 tag(s): {page.h1s}",
+        detail=f"Found {len(page.h1s)} H1 tag(s): {h1_preview}",
         fix="Use exactly one H1 per page that states the page's main topic." if len(page.h1s) != 1 else None,
     ))
 

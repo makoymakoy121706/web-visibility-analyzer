@@ -4,6 +4,15 @@ from __future__ import annotations
 from app.models import CategoryResult, Finding
 
 
+def shorten(text: str, limit: int = 70) -> str:
+    """Collapses whitespace and truncates for display in a Finding.detail --
+    without this, a long or duplicated heading (e.g. two H1s with the same
+    hero copy) makes the finding unreadable in both the CLI and the UI.
+    """
+    collapsed = " ".join(text.split())
+    return collapsed if len(collapsed) <= limit else collapsed[:limit].rstrip() + "…"
+
+
 def grade_for(score: int) -> str:
     if score >= 90:
         return "A"

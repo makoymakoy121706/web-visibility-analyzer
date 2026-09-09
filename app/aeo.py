@@ -6,7 +6,7 @@ from __future__ import annotations
 import re
 
 from app.models import Finding
-from app.scoring import build_category_result
+from app.scoring import build_category_result, shorten
 from app.scraper import PageData
 
 SNIPPET_WORTHY_TYPES = {
@@ -38,11 +38,12 @@ def analyze_aeo(page: PageData):
 
     has_howto_schema = "HowTo" in schema_types
     question_headings = [h for _, h in page.headings_all if h.strip().endswith("?")]
+    question_preview = [shorten(h) for h in question_headings[:5]]
     findings.append(Finding(
         check="Question-style headings (snippet bait)",
         passed=len(question_headings) > 0,
         weight=8,
-        detail=f"{len(question_headings)} heading(s) phrased as questions: {question_headings[:5]}",
+        detail=f"{len(question_headings)} heading(s) phrased as questions: {question_preview}",
         fix="Rephrase key H2/H3 headings as the exact questions users ask (e.g. 'How much does X cost?') -- this is what gets pulled into answer boxes." if not question_headings else None,
     ))
 
