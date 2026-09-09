@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: web-visibility-analyzer
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      # Entered manually in the Render dashboard during setup -- never
+      # committed to the repo, never passed through anything but Render's
+      # own env var UI.
+      - key: ANTHROPIC_API_KEY
+        sync: false
