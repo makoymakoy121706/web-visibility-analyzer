@@ -38,14 +38,19 @@ to upgrade specific checks to real data:
 
 | Env var | Upgrades | Free tier? |
 |---|---|---|
-| `GROQ_API_KEY` | GEO qualitative scoring (LLM judges citability) | Yes, generous — [console.groq.com/keys](https://console.groq.com/keys) |
-| `GEMINI_API_KEY` | Same, used if Groq isn't set | Yes — Google AI Studio |
-| `OPENAI_API_KEY` | Same, used if neither above is set | Pay-as-you-go |
+| `ANTHROPIC_API_KEY` | GEO qualitative scoring (Claude judges citability), via the official `anthropic` SDK | Pay-as-you-go — [console.anthropic.com/settings/keys](https://console.anthropic.com/settings/keys) |
+| `ANTHROPIC_MODEL` | Optional override, defaults to `claude-opus-5` | — |
+| `GROQ_API_KEY` | Same, used only if `ANTHROPIC_API_KEY` isn't set | Yes, generous — [console.groq.com/keys](https://console.groq.com/keys) |
+| `GEMINI_API_KEY` | Same, used if neither above is set | Yes — Google AI Studio |
+| `OPENAI_API_KEY` | Same, used if none above are set | Pay-as-you-go |
 | `PAGESPEED_API_KEY` | Real Core Web Vitals (LCP/CLS/Lighthouse score) instead of a response-time proxy | Yes, no billing required |
 
-Provider selection is automatic priority order (Groq → Gemini → OpenAI → heuristic). If a key
-is present but the call fails (rate limit, invalid key, network), the app **falls back to the
-heuristic instead of crashing** — every report field says exactly which mode produced it, so a
+Provider selection is automatic priority order (Claude → Groq → Gemini → OpenAI → heuristic).
+Claude is the primary provider via the official `anthropic` Python SDK (`app/llm_client.py`),
+called at `output_config.effort: "low"` since GEO scoring is a short, repetitive
+classification task rather than a reasoning-heavy one. If a key is present but the call fails
+(rate limit, invalid key, network, safety refusal), the app **falls back to the heuristic
+instead of crashing** — every report field says exactly which mode produced it, so a
 client-facing report is never silently wrong about its own confidence.
 
 ---
@@ -60,10 +65,13 @@ client-facing report is never silently wrong about its own confidence.
 - **FastAPI + vanilla JS** over a heavier frontend framework — the deliverable calls for "a
   simple web UI," and a build step / framework here would be pure overhead. FastAPI's
   auto-validation via Pydantic also doubles as the report schema.
-- **Groq as default LLM provider** — free tier is fast and generous enough for a demo/small
-  client tool, and it's OpenAI-wire-compatible, so the same request code serves Groq and
-  OpenAI. Gemini is wired as a second free-tier fallback so the tool doesn't have a single
-  point of failure on one vendor's rate limits.
+- **Claude (official `anthropic` SDK) as the primary LLM provider** — the GEO check is
+  fundamentally a judgment call ("would a generative search engine cite this page?"), which is
+  exactly the kind of nuanced, instruction-following evaluation Claude is strong at, and the
+  SDK's typed exception hierarchy (`RateLimitError`, `AuthenticationError`, `APIStatusError`,
+  `APIConnectionError`) makes the fallback-on-failure logic precise rather than a blanket
+  `except Exception`. Groq/Gemini/OpenAI remain wired as fallbacks in priority order so the
+  tool isn't a single point of failure on one vendor's key or rate limit.
 - **rich** for the CLI report — genuinely more legible for demoing to a non-technical
   stakeholder than a wall of print statements, at negligible cost.
 
