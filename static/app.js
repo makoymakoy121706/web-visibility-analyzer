@@ -52,6 +52,7 @@ function render(report) {
         <div class="sub">Grade <b>${report.overall_grade}</b> &middot; GEO scoring via <b>${escapeHtml(report.llm_provider)}</b></div>
       </div>
     </div>
+    ${report.content_warning ? `<div class="content-warning">⚠️ <div>${escapeHtml(report.content_warning)}</div></div>` : ""}
     <div class="categories">
       ${cats.map(catCard).join("")}
     </div>

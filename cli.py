@@ -43,6 +43,9 @@ def render_rich(report: Report) -> None:
         title="Web Vitals & Search Visibility Report",
     ))
 
+    if report.content_warning:
+        console.print(Panel(report.content_warning, title="⚠ Content Warning", border_style="bold yellow"))
+
     for result in (report.seo, report.aeo, report.geo):
         console.print(_category_table(result))
 
@@ -72,6 +75,8 @@ def _category_table(result: CategoryResult) -> Table:
 def render_plain(report: Report) -> None:
     print(f"{report.final_url}")
     print(f"Overall: {report.overall_score}/100 ({report.overall_grade})  |  GEO scoring via: {report.llm_provider}\n")
+    if report.content_warning:
+        print(f"WARNING: {report.content_warning}\n")
     for result in (report.seo, report.aeo, report.geo):
         print(f"== {result.category}: {result.score}/100 ({result.grade}) ==")
         for f in result.findings:

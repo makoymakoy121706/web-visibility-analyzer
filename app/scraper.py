@@ -43,6 +43,8 @@ class PageData:
     json_ld: list[dict] = field(default_factory=list)
     word_count: int = 0
     visible_text: str = ""
+    noscript_text: str = ""  # content of <noscript> fallbacks -- a signal the
+    # real page requires JS execution we don't perform (see analyzer.py)
     robots_txt_found: bool = False
     sitemap_found: bool = False
     is_https: bool = False
@@ -143,6 +145,8 @@ def _extract(page: PageData) -> None:
             page.json_ld.extend(d for d in data if isinstance(d, dict))
         elif isinstance(data, dict):
             page.json_ld.append(data)
+
+    page.noscript_text = " ".join(tag.get_text(strip=True) for tag in soup.find_all("noscript"))
 
     for tag in soup(["script", "style", "noscript"]):
         tag.decompose()

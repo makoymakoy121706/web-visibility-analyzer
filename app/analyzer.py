@@ -7,8 +7,13 @@ from app.aeo import analyze_aeo
 from app.geo import analyze_geo
 from app.models import Report
 from app.scoring import grade_for, top_actions_from
-from app.scraper import fetch_page
+from app.scraper import PageData, fetch_page
 from app.seo import analyze_seo
+
+# Below this word count, a real page (even a bad one) is unusual -- nav,
+# footer, and boilerplate alone usually clear it. A page this thin was very
+# likely served to us as a bot-wall / login-gate rather than its real content.
+THIN_CONTENT_WORDS = 150
 
 
 def analyze_url(url: str) -> Report:
@@ -32,4 +37,33 @@ def analyze_url(url: str) -> Report:
         geo=geo_result,
         llm_provider=llm_provider,
         top_actions=top_actions,
+        content_warning=_detect_content_warning(page),
     )
+
+
+def _detect_content_warning(page: PageData) -> str | None:
+    needs_js = len(page.noscript_text) > 20
+    thin = page.word_count < THIN_CONTENT_WORDS
+
+    if needs_js and thin:
+        return (
+            f"This page returned only {page.word_count} words of visible text and includes a "
+            "<noscript> fallback, which strongly suggests the real page requires JavaScript to "
+            "render. This tool only reads the initial server-sent HTML (no browser execution), "
+            "so the scores below likely reflect a bot-wall or loading shell -- not what a human "
+            "visitor actually sees. Common on social platforms and JS single-page apps."
+        )
+    if needs_js:
+        return (
+            "This page includes a <noscript> fallback, indicating it may rely on JavaScript to "
+            "render its real content. This tool only reads server-sent HTML, so some content may "
+            "be missing from the analysis below."
+        )
+    if thin:
+        return (
+            f"This page returned only {page.word_count} words of visible text -- unusually thin "
+            "for a real page. If this doesn't match what you see in a browser, the site may be "
+            "showing a login wall, bot-detection page, or a JavaScript-rendered shell to "
+            "non-browser requests rather than its real content."
+        )
+    return None
