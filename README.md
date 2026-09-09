@@ -117,14 +117,25 @@ The qualitative half of GEO — "would an LLM actually cite this?" — is inhere
 call, so it's the one thing delegated to an LLM rather than regex. The prompt in `geo.py`:
 - Sets a **strict, evidence-based persona** in the system prompt to counter the default
   helpful/encouraging tone LLMs default to, which would otherwise inflate every score.
-- Requests **only JSON matching an explicit schema** (three 0-10 scores + one-sentence
-  reasoning + one-sentence improvement each), with `response_format: json_object` /
-  `response_mime_type: application/json` set at the API level as a second guardrail.
 - Truncates page content to 6,000 characters — enough context to judge tone and structure
   without blowing through free-tier token/rate limits on large pages.
 - Parses defensively (`_extract_json` strips markdown fences some models add anyway) and
   raises a typed `LLMUnavailable` on any failure mode, which `geo.py` catches to fall back to
   the heuristic scorer rather than ever surfacing a raw API error to the report.
+
+**A real finding from testing this against live traffic, worth calling out explicitly:**
+asking for "only JSON matching this schema" in prompt text is not sufficient on its own —
+in testing, Claude returned valid-but-differently-keyed JSON across otherwise-identical
+calls (`{"score": 8, "explanation": "..."}` on one call, `{"citation_likelihood": ...,
+"authority": ..., "relevance": ...}` on another), neither matching the three-axis schema the
+prompt asked for. Silently `.get(key, {})`-ing around that would have shipped a report that
+looked correct but quietly reported 0/10 on two axes whenever the model drifted. Fixed by
+switching to Anthropic's **structured outputs** (`output_config.format: {type: "json_schema",
+schema: RESULT_SCHEMA}` in `llm_client.py`), which is enforced server-side rather than
+requested in prose — the response is now guaranteed to match `RESULT_SCHEMA` in `geo.py`, and
+`_findings_from_llm_result` was changed to index (`result[key]`, raising `KeyError` on a
+mismatch) instead of defaulting, so non-Anthropic providers that don't support enforcement
+correctly fall back to the heuristic rather than silently fabricating zero scores.
 
 ### Error handling
 - `FetchError` for anything network/HTTP-level (bad URL, timeout, 4xx/5xx) — surfaced as a
@@ -134,6 +145,29 @@ call, so it's the one thing delegated to an LLM rather than regex. The prompt in
   always states which mode (`heuristic` vs. provider name) produced the GEO section, so
   nothing is silently degraded.
 - PageSpeed Insights failures fall back to the response-time/page-weight proxy the same way.
+
+### Content-warning detection (a real limitation, surfaced instead of hidden)
+Testing against facebook.com returned a 27/F overall score — mathematically correct given
+what was fetched, but misleading on its own: this tool does a single static HTTP fetch with
+no JavaScript execution and no login, so a platform that gates real content behind auth
+(Facebook, LinkedIn, most social platforms) or renders everything client-side hands back a
+near-empty shell instead of its real page. Rather than let that read as a scoring bug,
+`analyzer.py::_detect_content_warning` checks two signals on the fetched page — visible text
+under 150 words (real pages rarely fall below this, even bad ones), and the presence of a
+`<noscript>` fallback (captured in `scraper.py` before it's stripped from the text used for
+word count) — and surfaces a `content_warning` on the report explaining that the score likely
+reflects a bot-wall or JS-rendering shell rather than the real site. Rendered as a panel in
+the CLI and a banner in the web UI; verified it fires on facebook.com and stays silent on
+normal sites (stripe.com, Wikipedia). This is a partial mitigation for the JS-rendering gap
+in Roadmap item 4 below — it can't recover the real content without a headless browser, but it
+stops the report from silently misleading whoever reads it.
+
+### Testing
+`pytest tests/` — 6 tests covering: SEO/AEO scoring against synthetic strong/weak HTML, GEO's
+heuristic fallback runs with no LLM key configured, the scoring math (weighted percentage +
+grade), `top_actions` dedup/ranking, and that a network failure raises `FetchError` rather
+than crashing. All network-independent except the last, which hits a deliberately-invalid
+domain.
 
 ---
 
@@ -173,7 +207,10 @@ built for the first channel only, if that. This tool gives a non-technical clien
    snippet in the report so implementation is copy-paste rather than another to-do.
 4. **Headless-render pass for JS-heavy sites** — add an optional Playwright-based fetch path
    for SPA/client-side-rendered sites, where the current static-HTML fetch would undercount
-   content that only exists after hydration.
+   content that only exists after hydration. *(Partially mitigated already: the tool now
+   detects and flags this case via `content_warning` — see Process Documentation — instead of
+   silently misreporting the score; a headless fetch would recover the real content, not just
+   flag its absence.)*
 5. **Historical tracking + scheduled re-scans** — persist reports (SQLite/Postgres) and re-run
    on a schedule, so the product becomes a monitored retainer service ("we re-check your score
    monthly") instead of a one-off report — directly supporting a recurring-revenue offer.
