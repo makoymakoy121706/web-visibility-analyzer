@@ -88,7 +88,8 @@ def analyze(req: AnalyzeRequest, request: Request):
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok"}
+    from app.llm_client import get_active_provider  # local import: avoid import cost on the hot path
+    return {"status": "ok", "active_llm_provider": get_active_provider()}
 
 
 @app.get("/")
