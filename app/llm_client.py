@@ -21,7 +21,7 @@ import re
 import anthropic
 import httpx
 
-ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-opus-5")
+ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL") or "claude-opus-5"
 GROQ_MODEL = "llama-3.3-70b-versatile"
 GEMINI_MODEL = "gemini-1.5-flash"
 OPENAI_MODEL = "gpt-4o-mini"
@@ -43,14 +43,21 @@ def get_active_provider() -> str:
     return "heuristic"
 
 
-def call_llm_json(system_prompt: str, user_prompt: str) -> dict:
+def call_llm_json(system_prompt: str, user_prompt: str, json_schema: dict | None = None) -> dict:
     """Calls whichever provider is configured and returns parsed JSON.
     Raises LLMUnavailable if no provider is configured or the call fails,
     so callers can fall back to a heuristic without special-casing providers.
+
+    `json_schema` (JSON Schema dict) is enforced server-side on Anthropic via
+    structured outputs -- the response is guaranteed to match it, rather than
+    relying on the model to follow schema instructions embedded in the prompt
+    text, which in testing this app did not reliably hold (Claude returned
+    plausible-looking but differently-keyed JSON across otherwise-identical
+    calls). Other providers still get the schema described in the prompt only.
     """
     provider = get_active_provider()
     if provider == "anthropic":
-        return _call_anthropic(system_prompt, user_prompt)
+        return _call_anthropic(system_prompt, user_prompt, json_schema)
     if provider == "groq":
         return _call_openai_compatible(
             base_url="https://api.groq.com/openai/v1/chat/completions",
@@ -82,16 +89,19 @@ def _get_anthropic_client() -> anthropic.Anthropic:
     return _anthropic_client
 
 
-def _call_anthropic(system_prompt: str, user_prompt: str) -> dict:
+def _call_anthropic(system_prompt: str, user_prompt: str, json_schema: dict | None) -> dict:
     client = _get_anthropic_client()
+    # "low" effort: this is a short, repetitive classification task (score 3
+    # axes + one-sentence reasoning), not a reasoning-heavy call.
+    output_config: dict = {"effort": "low"}
+    if json_schema is not None:
+        output_config["format"] = {"type": "json_schema", "schema": json_schema}
     try:
         response = client.messages.create(
             model=ANTHROPIC_MODEL,
             max_tokens=1024,
             system=system_prompt,
-            # "low" effort: this is a short, repetitive classification task
-            # (score 3 axes + one-sentence reasoning), not a reasoning-heavy call.
-            output_config={"effort": "low"},
+            output_config=output_config,
             messages=[{"role": "user", "content": user_prompt}],
         )
     except anthropic.RateLimitError as exc:

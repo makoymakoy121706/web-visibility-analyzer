@@ -19,6 +19,31 @@ SOURCE_WORDS = re.compile(r"\b(according to|source:|study by|research (from|by)|
 
 MAX_CONTENT_CHARS = 6000  # keep prompts small and fast on free-tier rate limits
 
+_AXIS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        # 0-10 is enforced by prompt text + _clamp_score(), not JSON Schema --
+        # Anthropic's structured-output schema subset rejects numeric
+        # minimum/maximum on integer properties (400 invalid_request_error).
+        "score": {"type": "integer"},
+        "reasoning": {"type": "string"},
+        "improvement": {"type": "string"},
+    },
+    "required": ["score", "reasoning", "improvement"],
+    "additionalProperties": False,
+}
+
+RESULT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "entity_authority": _AXIS_SCHEMA,
+        "llm_readability": _AXIS_SCHEMA,
+        "citation_worthiness": _AXIS_SCHEMA,
+    },
+    "required": ["entity_authority", "llm_readability", "citation_worthiness"],
+    "additionalProperties": False,
+}
+
 SYSTEM_PROMPT = (
     "You are an expert in Generative Engine Optimization (GEO) -- evaluating whether "
     "AI assistants like ChatGPT, Claude, and Perplexity would cite a webpage as a source "
@@ -96,7 +121,12 @@ def _llm_readability_findings(page: PageData) -> tuple[list[Finding], str]:
     provider = get_active_provider()
     if provider != "heuristic":
         try:
-            result = call_llm_json(SYSTEM_PROMPT, user_prompt)
+            # json_schema is enforced server-side on Anthropic (structured outputs);
+            # other providers get it as prompt text only, and _findings_from_llm_result
+            # raises KeyError below if they don't actually follow it -- which is caught
+            # here and falls through to the heuristic rather than reporting fabricated
+            # zero scores for a schema the model silently ignored.
+            result = call_llm_json(SYSTEM_PROMPT, user_prompt, json_schema=RESULT_SCHEMA)
             return _findings_from_llm_result(result, provider), provider
         except (LLMUnavailable, KeyError, TypeError, ValueError):
             pass  # fall through to heuristic below; provider had a key but the call failed
@@ -112,8 +142,8 @@ def _findings_from_llm_result(result: dict, provider: str) -> list[Finding]:
         "citation_worthiness": "Citation worthiness (LLM-judged)",
     }
     for key, label in labels.items():
-        item = result.get(key, {})
-        score = int(item.get("score", 0))
+        item = result[key]  # KeyError here -> caller falls back to heuristic
+        score = max(0, min(10, int(item["score"])))
         passed = score >= 6
         reasoning = item.get("reasoning", "")
         improvement = item.get("improvement", "")
